@@ -11,6 +11,7 @@ pub struct UserType {
     pub email_verified: Option<DateTime<Utc>>,
     pub image: Option<String>,
     pub bio: Option<String>,
+    pub role: Option<String>,
 }
 
 impl From<crate::models::auth::User> for UserType {
@@ -22,6 +23,7 @@ impl From<crate::models::auth::User> for UserType {
             email_verified: user.email_verified,
             image: user.image,
             bio: user.bio,
+            role: user.role,
         }
     }
 }

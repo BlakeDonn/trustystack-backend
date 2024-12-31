@@ -41,6 +41,7 @@ diesel::table! {
         emailVerified -> Nullable<Timestamptz>,
         image -> Nullable<Text>,
         bio -> Nullable<Text>,
+        role -> Nullable<Text>,
     }
 }
 

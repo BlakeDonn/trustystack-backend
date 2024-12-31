@@ -13,6 +13,7 @@ pub struct User {
     pub email_verified: Option<DateTime<Utc>>,
     pub image: Option<String>,
     pub bio: Option<String>,
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable)]
