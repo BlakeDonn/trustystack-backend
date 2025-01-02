@@ -1,6 +1,7 @@
 // src/graphql_schema/root_query.rs
 
 use crate::graphql_schema::context::Context;
+use crate::graphql_schema::dashboard::dashboard_query::DashboardQuery;
 use crate::graphql_schema::parts::category_graphql::CategoryGraphQL;
 use crate::graphql_schema::parts::manufacturer_graphql::ManufacturerGraphQL;
 use crate::graphql_schema::parts::part_graphql::PartGraphQL;
@@ -21,6 +22,10 @@ impl RootQuery {
     fn apiVersion() -> &str {
         info!("apiVersion query called");
         "1.0"
+    }
+
+    fn dashboard(&self) -> &DashboardQuery {
+        &DashboardQuery
     }
 
     /// Fetches all parts from the database with optional pagination.

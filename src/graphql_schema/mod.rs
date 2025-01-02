@@ -1,4 +1,5 @@
 pub mod context;
+pub mod dashboard;
 pub mod parts;
 pub mod prebuilt;
 pub mod queries;
