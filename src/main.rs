@@ -10,6 +10,7 @@ use log::{error, info};
 use rust_backend::graphql_handler::graphql_handler;
 use rust_backend::graphql_schema::context::Context;
 use rust_backend::graphql_schema::schema::create_schema;
+use rust_backend::middleware::auth::AuthMiddleware;
 use rust_backend::middleware::logging::GraphQLLogging;
 use rust_backend::middleware::timing::Timing;
 use std::env;
@@ -90,6 +91,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Timing)
             .wrap(GraphQLLogging) // Logs GraphQL query and variables
             .wrap(cors)
+            .wrap(AuthMiddleware) // Add the auth middleware
             // Share the GraphQL schema with handlers
             .app_data(web::Data::new(schema_clone.clone()))
             // Share the GraphQL context with handlers
