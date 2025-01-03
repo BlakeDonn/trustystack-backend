@@ -7,13 +7,11 @@ use diesel::PgConnection;
 use dotenv::dotenv;
 use env_logger::Env;
 use log::{error, info};
-use rust_backend::diesel_schema::users;
 use rust_backend::graphql_handler::graphql_handler;
 use rust_backend::graphql_schema::context::Context;
 use rust_backend::graphql_schema::schema::create_schema;
 use rust_backend::middleware::logging::GraphQLLogging;
 use rust_backend::middleware::timing::Timing;
-use rust_backend::models::auth::User;
 use std::env;
 use std::sync::Arc;
 
@@ -67,11 +65,23 @@ async fn main() -> std::io::Result<()> {
     // Clone schema for use in server closure
     let schema_clone = schema.clone();
 
+    // Define allowed origins
+    let allowed_origins = vec!["http://localhost:3000"]; // Update with your frontend URL in production
+
     // Start the Actix-web server
     let server = HttpServer::new(move || {
-        // Configure CORS to allow frontend access (adjust origins as needed)
+        // Configure CORS to allow frontend access
+        let _origin_clone = allowed_origins.clone();
         let cors = Cors::default()
-            .allow_any_origin()
+            .allowed_origin_fn(move |origin, _req_head| {
+                if let Some(origin_str) = origin.as_bytes().get(..) {
+                    _origin_clone
+                        .iter()
+                        .any(|&allowed| allowed.as_bytes() == origin_str)
+                } else {
+                    false
+                }
+            })
             .allow_any_method()
             .allow_any_header()
             .supports_credentials();
@@ -113,11 +123,9 @@ async fn main() -> std::io::Result<()> {
 
 /// Handler to serve the GraphQL Playground UI
 async fn playground_handler() -> impl Responder {
-    // Import Juniper's playground source
     use actix_web::HttpResponse;
     use juniper::http::playground::playground_source;
 
-    // Generate the playground HTML with the GraphQL endpoint configured
     let html = playground_source("/graphql", None);
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
