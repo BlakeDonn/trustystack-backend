@@ -74,18 +74,12 @@ async fn main() -> std::io::Result<()> {
         // Configure CORS to allow frontend access
         let _origin_clone = allowed_origins.clone();
         let cors = Cors::default()
-            .allowed_origin_fn(move |origin, _req_head| {
-                if let Some(origin_str) = origin.as_bytes().get(..) {
-                    _origin_clone
-                        .iter()
-                        .any(|&allowed| allowed.as_bytes() == origin_str)
-                } else {
-                    false
-                }
-            })
-            .allow_any_method()
-            .allow_any_header()
-            .supports_credentials();
+            .allowed_origin("http://localhost:3000")
+            .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+            .allowed_headers(vec!["Authorization", "Content-Type"])
+            .expose_headers(vec!["Authorization"])
+            .supports_credentials()
+            .max_age(3600);
 
         App::new()
             .wrap(Timing)

@@ -16,22 +16,14 @@ use crate::models::parts::storage_spec::StorageSpec;
 
 /// Represents the context that holds the database connection pool.
 pub struct Context {
-    pub db: Pool<ConnectionManager<PgConnection>>,
-    pub user: Option<User>,
+    pub pool: Pool<ConnectionManager<PgConnection>>,
+    pub current_user: Option<User>,
 }
 
 impl Context {
     /// Creates a new context with the provided database connection pool.
-    pub fn new(db: Pool<ConnectionManager<PgConnection>>, user: Option<User>) -> Self {
-        if let Some(ref user) = user {
-            info!(
-                "Creating new Context with user: {}",
-                user.email.as_deref().unwrap_or("no email")
-            );
-        } else {
-            info!("Creating new Context without a user.");
-        }
-        Context { db, user }
+    pub fn new(pool: Pool<ConnectionManager<PgConnection>>, current_user: Option<User>) -> Self {
+        Context { pool, current_user }
     }
 
     /// Retrieves a connection from the pool.
@@ -39,7 +31,7 @@ impl Context {
         &self,
     ) -> Result<PooledConnection<ConnectionManager<PgConnection>>, diesel::r2d2::PoolError> {
         debug!("Attempting to get a database connection from the pool.");
-        self.db.get()
+        self.pool.get()
     }
 
     /// Fetches a manufacturer by ID from the database.

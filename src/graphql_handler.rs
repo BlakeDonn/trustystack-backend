@@ -25,7 +25,7 @@ pub async fn graphql_handler(
         .and_then(|s| s.strip_prefix("Bearer "));
 
     // Attempt to get a DB connection
-    let mut conn = match context_data.db.get() {
+    let mut conn = match context_data.pool.get() {
         Ok(conn) => conn,
         Err(_) => {
             return HttpResponse::InternalServerError().body("DB connection error");
@@ -34,6 +34,7 @@ pub async fn graphql_handler(
 
     // Initialize user as None
     let mut user: Option<User> = None;
+    print!("auth_header");
 
     // If a token is provided, attempt to verify it
     if let Some(raw_token) = auth_header {
@@ -49,17 +50,11 @@ pub async fn graphql_handler(
                             role: Some("user".to_string()),
                             email_verified: Some(Utc::now()),
                             image: Some("image".to_string()),
-                            bio: Some("image".to_string()),
+                            bio: Some("bio".to_string()),
                         });
                     }
-                    Err(TokenVerifyError::Mismatch) => {
-                        return HttpResponse::Unauthorized().body("Session token mismatch");
-                    }
-                    Err(TokenVerifyError::NotFound) => {
-                        return HttpResponse::Unauthorized().body("No id_token found for user");
-                    }
-                    Err(TokenVerifyError::DbError(_)) => {
-                        return HttpResponse::InternalServerError().finish();
+                    Err(e) => {
+                        return HttpResponse::Unauthorized().body(format!("Auth error: {:?}", e));
                     }
                 }
             }
@@ -69,8 +64,8 @@ pub async fn graphql_handler(
         }
     }
 
-    // Create Juniper context with the user (if any)
-    let ctx = Context::new(context_data.db.clone(), user);
+    // Create context with the user (if any)
+    let ctx = Context::new(context_data.pool.clone(), user);
 
     // Execute the GraphQL request
     let res = data.execute(&schema, &ctx).await;

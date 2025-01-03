@@ -1,7 +1,10 @@
+use crate::models::auth::User;
+use crate::{diesel_schema::users::users::dsl as users_dsl, graphql_schema::context};
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error, HttpMessage,
 };
+use diesel::prelude::*;
 use futures::future::{ready, LocalBoxFuture, Ready};
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
@@ -50,13 +53,20 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        // Skip auth for non-GraphQL endpoints or preflight requests
-        if req.path() != "/graphql" || req.method() == "OPTIONS" {
+        // Skip auth for OPTIONS requests
+        if req.method() == "OPTIONS" {
             let fut = self.service.call(req);
             return Box::pin(async move { fut.await });
         }
 
-        // Get the Authorization header
+        // During development, allow all requests
+        #[cfg(debug_assertions)]
+        {
+            let fut = self.service.call(req);
+            return Box::pin(async move { fut.await });
+        }
+
+        // Production auth logic
         let auth_header = req
             .headers()
             .get("Authorization")
@@ -64,27 +74,24 @@ where
             .and_then(|h| h.strip_prefix("Bearer "));
 
         if let Some(token) = auth_header {
-            // Validate JWT token
             let secret =
                 std::env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key".to_string());
             let key = DecodingKey::from_secret(secret.as_bytes());
 
             match decode::<Claims>(token, &key, &Validation::default()) {
                 Ok(token_data) => {
-                    // Add the validated user info to request extensions
                     req.extensions_mut().insert(token_data.claims);
                     let fut = self.service.call(req);
                     Box::pin(async move { fut.await })
                 }
-                Err(_) => {
-                    // Invalid token
+                Err(e) => {
+                    println!("Token validation error: {:?}", e);
                     Box::pin(
                         async move { Err(actix_web::error::ErrorUnauthorized("Invalid token")) },
                     )
                 }
             }
         } else {
-            // No token provided
             Box::pin(async move { Err(actix_web::error::ErrorUnauthorized("No token provided")) })
         }
     }

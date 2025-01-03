@@ -1,7 +1,7 @@
 // src/graphql_schema/root_query.rs
 
 use crate::graphql_schema::context::Context;
-use crate::graphql_schema::dashboard::dashboard_query::DashboardQuery;
+use crate::graphql_schema::dashboard::dashboard_query::{DashboardData, DashboardQuery};
 use crate::graphql_schema::parts::category_graphql::CategoryGraphQL;
 use crate::graphql_schema::parts::manufacturer_graphql::ManufacturerGraphQL;
 use crate::graphql_schema::parts::part_graphql::PartGraphQL;
@@ -9,7 +9,7 @@ use crate::graphql_schema::queries::categories_queries::CategoriesQueries;
 use crate::graphql_schema::queries::manufacturers_queries::ManufacturersQueries;
 use crate::graphql_schema::queries::parts_queries::{get_all_parts, get_part_by_id};
 use crate::graphql_schema::users::query::UserQuery;
-use juniper::{EmptyMutation, EmptySubscription, RootNode};
+use juniper::{graphql_value, EmptyMutation, EmptySubscription, FieldError, FieldResult, RootNode};
 use log::{error, info};
 use std::time::Instant;
 
@@ -35,7 +35,7 @@ impl RootQuery {
         offset: Option<i32>,
     ) -> juniper::FieldResult<Vec<PartGraphQL>> {
         // Authorization Check
-        if let Some(user) = &context.user {
+        if let Some(user) = &context.current_user {
             if user.email.is_none() {
                 error!("Unauthorized access attempt to 'parts' query by user without email");
                 return Err(juniper::FieldError::new(
@@ -190,6 +190,24 @@ impl RootQuery {
 
     fn user_query() -> UserQuery {
         UserQuery
+    }
+
+    pub async fn dashboard_data(context: &Context) -> FieldResult<DashboardData> {
+        if let Some(user) = &context.current_user {
+            // Your dashboard data logic here
+            Ok(DashboardData {
+                projects: vec!["Project A".to_string(), "Project B".to_string()],
+                welcome_msg: format!(
+                    "Welcome, {}!",
+                    user.name.clone().unwrap_or_else(|| "User".to_string())
+                ),
+            })
+        } else {
+            Err(FieldError::new(
+                "Not authenticated",
+                graphql_value!({ "code": "UNAUTHORIZED" }),
+            ))
+        }
     }
 }
 
