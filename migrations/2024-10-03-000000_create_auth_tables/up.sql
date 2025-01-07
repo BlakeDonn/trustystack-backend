@@ -4,7 +4,8 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE,
     "emailVerified" TIMESTAMPTZ,
     image TEXT,
-    bio TEXT
+    bio TEXT,
+    role TEXT
 );
 
 CREATE TABLE sessions (

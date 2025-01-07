@@ -13,6 +13,21 @@ pub struct User {
     pub email_verified: Option<DateTime<Utc>>,
     pub image: Option<String>,
     pub bio: Option<String>,
+    pub role: Option<String>,
+}
+
+impl User {
+    pub fn guest() -> Self {
+        User {
+            id: 0,
+            name: Some("Guest".to_string()),
+            email: None,
+            email_verified: None,
+            image: None,
+            bio: None,
+            role: Some("guest".to_string()),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable)]

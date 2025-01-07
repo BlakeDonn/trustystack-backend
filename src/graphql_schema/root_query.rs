@@ -1,6 +1,7 @@
 // src/graphql_schema/root_query.rs
 
 use crate::graphql_schema::context::Context;
+use crate::graphql_schema::dashboard::dashboard_query::{DashboardData, DashboardQuery};
 use crate::graphql_schema::parts::category_graphql::CategoryGraphQL;
 use crate::graphql_schema::parts::manufacturer_graphql::ManufacturerGraphQL;
 use crate::graphql_schema::parts::part_graphql::PartGraphQL;
@@ -8,7 +9,7 @@ use crate::graphql_schema::queries::categories_queries::CategoriesQueries;
 use crate::graphql_schema::queries::manufacturers_queries::ManufacturersQueries;
 use crate::graphql_schema::queries::parts_queries::{get_all_parts, get_part_by_id};
 use crate::graphql_schema::users::query::UserQuery;
-use juniper::{EmptyMutation, EmptySubscription, RootNode};
+use juniper::{graphql_value, EmptyMutation, EmptySubscription, FieldError, FieldResult, RootNode};
 use log::{error, info};
 use std::time::Instant;
 
@@ -23,6 +24,10 @@ impl RootQuery {
         "1.0"
     }
 
+    fn dashboard(&self) -> &DashboardQuery {
+        &DashboardQuery
+    }
+
     /// Fetches all parts from the database with optional pagination.
     fn parts(
         context: &Context,
@@ -30,7 +35,7 @@ impl RootQuery {
         offset: Option<i32>,
     ) -> juniper::FieldResult<Vec<PartGraphQL>> {
         // Authorization Check
-        if let Some(user) = &context.user {
+        if let Some(user) = &context.current_user {
             if user.email.is_none() {
                 error!("Unauthorized access attempt to 'parts' query by user without email");
                 return Err(juniper::FieldError::new(
@@ -185,6 +190,29 @@ impl RootQuery {
 
     fn user_query() -> UserQuery {
         UserQuery
+    }
+
+    pub async fn dashboard_data(context: &Context) -> FieldResult<DashboardData> {
+        let user = context.current_user.as_ref().unwrap(); // Will always have at least a guest user
+
+        // Example of different behavior for guests vs authenticated users
+        let projects = if user.id == 0 {
+            // Guest user
+            vec![
+                "Sample Project A".to_string(),
+                "Sample Project B".to_string(),
+            ]
+        } else {
+            // Authenticated user - fetch their actual projects
+            vec!["Project A".to_string(), "Project B".to_string()]
+        };
+
+        let user_name = user.name.clone().unwrap_or_else(|| "Guest".to_string());
+
+        Ok(DashboardData {
+            projects,
+            welcome_msg: format!("Welcome, {}!", user_name),
+        })
     }
 }
 
