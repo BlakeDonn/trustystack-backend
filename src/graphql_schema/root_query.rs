@@ -193,21 +193,26 @@ impl RootQuery {
     }
 
     pub async fn dashboard_data(context: &Context) -> FieldResult<DashboardData> {
-        if let Some(user) = &context.current_user {
-            // Your dashboard data logic here
-            Ok(DashboardData {
-                projects: vec!["Project A".to_string(), "Project B".to_string()],
-                welcome_msg: format!(
-                    "Welcome, {}!",
-                    user.name.clone().unwrap_or_else(|| "User".to_string())
-                ),
-            })
+        let user = context.current_user.as_ref().unwrap(); // Will always have at least a guest user
+
+        // Example of different behavior for guests vs authenticated users
+        let projects = if user.id == 0 {
+            // Guest user
+            vec![
+                "Sample Project A".to_string(),
+                "Sample Project B".to_string(),
+            ]
         } else {
-            Err(FieldError::new(
-                "Not authenticated",
-                graphql_value!({ "code": "UNAUTHORIZED" }),
-            ))
-        }
+            // Authenticated user - fetch their actual projects
+            vec!["Project A".to_string(), "Project B".to_string()]
+        };
+
+        let user_name = user.name.clone().unwrap_or_else(|| "Guest".to_string());
+
+        Ok(DashboardData {
+            projects,
+            welcome_msg: format!("Welcome, {}!", user_name),
+        })
     }
 }
 

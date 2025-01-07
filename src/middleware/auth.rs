@@ -1,22 +1,19 @@
-use crate::models::auth::User;
-use crate::{diesel_schema::users::users::dsl as users_dsl, graphql_schema::context};
+// src/middleware/auth.rs
+
+use crate::{auth::jwt::Claims, models::auth::User};
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error, HttpMessage,
+    Error,
+    HttpMessage, // Import to access `extensions_mut`
 };
-use diesel::prelude::*;
-use futures::future::{ready, LocalBoxFuture, Ready};
+use futures::future::LocalBoxFuture;
 use jsonwebtoken::{decode, DecodingKey, Validation};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
-use std::future::Future;
+use std::future::{ready, Ready};
 use std::pin::Pin;
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String,
-    exp: usize,
-}
-
+/// Authentication Middleware for Actix-web
 pub struct AuthMiddleware;
 
 impl<S, B> Transform<S, ServiceRequest> for AuthMiddleware
@@ -53,46 +50,80 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        // Skip auth for OPTIONS requests
+        // Skip authentication for OPTIONS requests
         if req.method() == "OPTIONS" {
             let fut = self.service.call(req);
             return Box::pin(async move { fut.await });
         }
 
-        // During development, allow all requests
+        // During development, create a guest user
         #[cfg(debug_assertions)]
         {
+            let guest = User::guest();
+            req.extensions_mut().insert(guest);
             let fut = self.service.call(req);
             return Box::pin(async move { fut.await });
         }
 
-        // Production auth logic
-        let auth_header = req
-            .headers()
-            .get("Authorization")
-            .and_then(|h| h.to_str().ok())
-            .and_then(|h| h.strip_prefix("Bearer "));
+        // Production authentication logic
+        let cookie_name = "next-auth.session-token";
+        let jwt_token = req.cookie(cookie_name).map(|cookie| {
+            info!("Found JWT token in cookie: {}", cookie.value());
+            cookie.value().to_owned()
+        });
 
-        if let Some(token) = auth_header {
-            let secret =
-                std::env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key".to_string());
-            let key = DecodingKey::from_secret(secret.as_bytes());
+        match jwt_token {
+            Some(token) => {
+                info!("Attempting to decode JWT token.");
+                // Retrieve JWT_SECRET from environment variables
+                let secret = match std::env::var("JWT_SECRET") {
+                    Ok(val) => val,
+                    Err(_) => {
+                        error!("JWT_SECRET not set in environment variables.");
+                        // Create guest user instead of returning an error
+                        let guest = User::guest();
+                        req.extensions_mut().insert(guest);
+                        let fut = self.service.call(req);
+                        return Box::pin(async move { fut.await });
+                    }
+                };
 
-            match decode::<Claims>(token, &key, &Validation::default()) {
-                Ok(token_data) => {
-                    req.extensions_mut().insert(token_data.claims);
-                    let fut = self.service.call(req);
-                    Box::pin(async move { fut.await })
-                }
-                Err(e) => {
-                    println!("Token validation error: {:?}", e);
-                    Box::pin(
-                        async move { Err(actix_web::error::ErrorUnauthorized("Invalid token")) },
-                    )
+                let decoding_key = DecodingKey::from_secret(secret.as_bytes());
+                let validation = Validation::default();
+
+                match decode::<Claims>(&token, &decoding_key, &validation) {
+                    Ok(token_data) => {
+                        info!("JWT token successfully decoded.");
+                        // Create a User instance from claims
+                        let user = User {
+                            id: token_data.claims.sub.parse().unwrap_or(0),
+                            email: Some(token_data.claims.email.clone()),
+                            name: Some("Test User".to_string()),
+                            role: Some(token_data.claims.role.clone()),
+                            email_verified: Some(chrono::Utc::now()),
+                            image: Some("image_url".to_string()),
+                            bio: Some("Bio".to_string()),
+                        };
+
+                        info!("Inserting user into request extensions: {:?}", user.email);
+                        req.extensions_mut().insert(user);
+                    }
+                    Err(e) => {
+                        error!("Token validation error: {:?}", e);
+                        // Create guest user instead of returning an error
+                        let guest = User::guest();
+                        req.extensions_mut().insert(guest);
+                    }
                 }
             }
-        } else {
-            Box::pin(async move { Err(actix_web::error::ErrorUnauthorized("No token provided")) })
+            None => {
+                info!("No authentication token found, creating guest user.");
+                let guest = User::guest();
+                req.extensions_mut().insert(guest);
+            }
         }
+
+        let fut = self.service.call(req);
+        Box::pin(async move { fut.await })
     }
 }

@@ -72,9 +72,8 @@ async fn main() -> std::io::Result<()> {
     // Start the Actix-web server
     let server = HttpServer::new(move || {
         // Configure CORS to allow frontend access
-        let _origin_clone = allowed_origins.clone();
         let cors = Cors::default()
-            .allowed_origin("http://localhost:3000")
+            .allowed_origin("http://localhost:3000") // Replace with your frontend URL
             .allowed_methods(vec!["GET", "POST", "OPTIONS"])
             .allowed_headers(vec!["Authorization", "Content-Type"])
             .expose_headers(vec!["Authorization"])
@@ -84,8 +83,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Timing)
             .wrap(GraphQLLogging) // Logs GraphQL query and variables
-            .wrap(cors)
             .wrap(AuthMiddleware) // Add the auth middleware
+            .wrap(cors)
             // Share the GraphQL schema with handlers
             .app_data(web::Data::new(schema_clone.clone()))
             // Share the GraphQL context with handlers

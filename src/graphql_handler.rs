@@ -2,13 +2,13 @@
 
 use std::sync::Arc;
 
+use actix_web::HttpMessage;
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
-use chrono::Utc;
 use juniper::http::GraphQLRequest;
+use log::info; // Import to access `extensions`
 
 use crate::graphql_schema::{context::Context, schema::Schema};
 use crate::models::auth::User;
-use crate::utils::auth_utils::{verify_user_token, TokenVerifyError};
 
 /// Handles GraphQL requests by executing the query and returning the response as JSON.
 pub async fn graphql_handler(
@@ -17,54 +17,19 @@ pub async fn graphql_handler(
     data: web::Json<GraphQLRequest>,
     context_data: web::Data<Context>,
 ) -> impl Responder {
-    // Extract auth token from header
-    let auth_header = req
-        .headers()
-        .get("Authorization")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "));
+    // Retrieve the authenticated user from request extensions
+    let user = req.extensions().get::<User>().cloned();
+    println!("{:?}", user);
 
-    // Attempt to get a DB connection
-    let mut conn = match context_data.pool.get() {
-        Ok(conn) => conn,
-        Err(_) => {
-            return HttpResponse::InternalServerError().body("DB connection error");
-        }
-    };
-
-    // Initialize user as None
-    let mut user: Option<User> = None;
-    print!("auth_header");
-
-    // If a token is provided, attempt to verify it
-    if let Some(raw_token) = auth_header {
-        match parse_jwt(raw_token) {
-            Ok(jwt_claims) => {
-                let extracted_user_id = jwt_claims.user_id;
-                match verify_user_token(&mut conn, extracted_user_id, raw_token) {
-                    Ok(_) => {
-                        user = Some(User {
-                            id: extracted_user_id,
-                            email: Some("test@example.com".to_string()),
-                            name: Some("Test User".to_string()),
-                            role: Some("user".to_string()),
-                            email_verified: Some(Utc::now()),
-                            image: Some("image".to_string()),
-                            bio: Some("bio".to_string()),
-                        });
-                    }
-                    Err(e) => {
-                        return HttpResponse::Unauthorized().body(format!("Auth error: {:?}", e));
-                    }
-                }
-            }
-            Err(_) => {
-                return HttpResponse::Unauthorized().body("Invalid token");
-            }
-        }
+    match &user {
+        Some(u) => info!(
+            "Authenticated request from user: {}",
+            u.email.as_deref().unwrap_or("no email")
+        ),
+        None => info!("Unauthenticated request."),
     }
 
-    // Create context with the user (if any)
+    // Create GraphQL context with the user (if any)
     let ctx = Context::new(context_data.pool.clone(), user);
 
     // Execute the GraphQL request
@@ -72,17 +37,4 @@ pub async fn graphql_handler(
 
     // Return the response as JSON
     HttpResponse::Ok().json(res)
-}
-
-/// Illustrative function that extracts user_id from a JWT
-/// In real code, you'd use a JWT library, parse claims, etc.
-fn parse_jwt(token: &str) -> Result<Claims, String> {
-    // Replace this with actual JWT parsing
-    // For example, using `jsonwebtoken` crate
-    let claims = Claims { user_id: 1 };
-    Ok(claims)
-}
-
-struct Claims {
-    user_id: i32,
 }
